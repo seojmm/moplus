@@ -3,6 +3,7 @@
 import Link from "next/link";
 import React, { useState } from "react";
 import { FaCheck } from "react-icons/fa6";
+import toast, { Toaster } from "react-hot-toast";
 import {
 	TbCircleNumber1,
 	TbCircleNumber2,
@@ -17,11 +18,9 @@ import {
 	TbCircleNumber4Filled,
 	TbCircleNumber5Filled,
 } from "react-icons/tb";
-
-interface CheckAnswerProps {
-	problemNumber: number;
-	moId: number;
-}
+import { useRouter } from "next/navigation";
+import { postAnswer } from "../../../apis/testResult";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 const CircleNumber = [
 	<TbCircleNumber1 key={1} size={30} color="orange" />,
@@ -39,10 +38,21 @@ const CircleNumberFilled = [
 	<TbCircleNumber5Filled key={5} size={30} color="orange" />,
 ];
 
-const CheckAnswer = ({ problemNumber, moId }: CheckAnswerProps) => {
+const notify = (missingFromSelected: number[]) => {
+	toast.error(`${missingFromSelected}번 문제의 선지를 선택하세요.`);
+};
+
+const CheckAnswer = ({
+	problemNumber,
+	id,
+}: {
+	problemNumber: number;
+	id: number;
+}) => {
+	const router = useRouter();
 	const [checkedProblems, setCheckedProblems] = useState<number[]>([]); // 오답 체크된 행을 관리하는 상태
 	const [selectedChoices, setSelectedChoices] = useState<{
-		[key: number]: number | null;
+		[key: number]: number;
 	}>({}); // 선택된 선지를 관리하는 상태
 
 	const questions = Array.from({ length: problemNumber }, (_, i) => i + 1);
@@ -56,6 +66,27 @@ const CheckAnswer = ({ problemNumber, moId }: CheckAnswerProps) => {
 		);
 	};
 
+	const mutation = useMutation({
+		mutationFn: (params: {
+			id: number;
+			wrongProblemArray: { problemNumber: string; incorrectAnswer: string }[];
+		}) => postAnswer(params.id, params.wrongProblemArray),
+		onSuccess: (data, variables) => {
+			console.log(data);
+			router.push(`/solvetime/${data}`);
+		},
+		// 에러 핸들링 (optional)
+		onError: (error) => {
+			console.error("Error posting data:", error);
+			alert("There was an error submitting your answers.");
+		},
+
+		// 요청이 완료되면 실행 (성공 또는 실패와 무관)
+		onSettled: () => {
+			console.log("Request has been processed.");
+		},
+	});
+
 	// 선지 선택 상태 설정
 	const handleChoiceSelect = (index: number, choice: number) => {
 		if (checkedProblems.includes(index)) {
@@ -65,6 +96,31 @@ const CheckAnswer = ({ problemNumber, moId }: CheckAnswerProps) => {
 			}));
 		}
 	};
+
+	const handleSubmit = (
+		id: number,
+		selectedChoices: {
+			[key: number]: number;
+		}
+	) => {
+		const wrongProblemArray = Object.entries(selectedChoices).map(
+			([key, value]) => ({
+				problemNumber: `${key}`,
+				incorrectAnswer: `${value + 1}`,
+			})
+		);
+		mutation.mutate({ id, wrongProblemArray });
+	};
+
+	// checkedProblems 배열의 값이 selectedChoices 배열에 포함되어 있는지 판별
+	const hasAllCheckedInSelected = checkedProblems.every((problem) =>
+		Object.keys(selectedChoices).map(Number).includes(problem)
+	);
+
+	// checkedProblems 배열의 값 중 selectedChoices에 없는 숫자 추출
+	const missingFromSelected = checkedProblems.filter(
+		(problem) => !Object.keys(selectedChoices).map(Number).includes(problem)
+	);
 
 	return (
 		<div>
@@ -112,14 +168,19 @@ const CheckAnswer = ({ problemNumber, moId }: CheckAnswerProps) => {
 					))}
 				</tbody>
 			</table>
-			<Link
-				href={`/solvetime/${moId}`}
-				className="flex justify-center my-4 pb-4"
-			>
-				<button className="w-64 h-12 bg-orange-200 text-orange-500 rounded-lg">
+			<div className="flex justify-center my-4">
+				<button
+					className="w-64 h-12 bg-orange-200 text-orange-500 rounded-lg"
+					onClick={() => {
+						hasAllCheckedInSelected
+							? handleSubmit(id, selectedChoices)
+							: notify(missingFromSelected);
+					}}
+				>
 					오답 체크 완료
 				</button>
-			</Link>
+				<Toaster />
+			</div>
 		</div>
 	);
 };
