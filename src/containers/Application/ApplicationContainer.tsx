@@ -54,6 +54,14 @@ const ApplicationContainer = () => {
 		setName(value);
 	};
 
+	const sendApplication = ({
+		testResultId,
+		name,
+		phoneNumber,
+	}: ApplicationForm) => {
+		postApplication({ testResultId, name, phoneNumber });
+		router.replace("/searchmo");
+	};
 	const DetailResultMutation = useMutation({
 		mutationFn: (params: {
 			testResultId: number;
